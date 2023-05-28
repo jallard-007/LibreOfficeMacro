@@ -167,10 +167,10 @@ sub main
 	next
 
 	refDoc.Close(True)
-	addToDoc(sectionsInfo, data)
+	addToDoc(sectionsInfo, data, "file2")
 end sub
 
-sub addToDoc(sectionInfo as loadSectionsReturnType, data as variant)
+sub addToDoc(sectionInfo as loadSectionsReturnType, data as variant, fileName as string)
 	Rem dim costCodeDoc as object
 	Rem dim currFolder as string
 	Rem currFolder = GetCurrentDirectory
@@ -200,10 +200,12 @@ sub addToDoc(sectionInfo as loadSectionsReturnType, data as variant)
 		column = column + 1
 		cellContent = sheet.getCellByPosition(column,row).getString()
 	loop
+	dim offset as integer
+	offset = column
 	for each section in data
 		sheet.columns.insertByIndex(column,1)
 		row = result.costCodeRowIndex
-		sheet.getCellByPosition(column,row).setString("&")
+		sheet.getCellByPosition(column,row).setString("&" + fileName + "-" + sectionInfo.sections(column - offset))
 		row = row + 1
 		cellContent = sheet.getCellByPosition(0,row).getString()
 		do while cellContent <> ""
