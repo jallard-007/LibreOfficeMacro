@@ -1,5 +1,6 @@
 REM  *****  BASIC  *****
 
+Rem opens the given file in hidden mode
 function OpenDocAsHidden(URL as string) as object
 	dim FileProperties(0) as New com.sun.star.beans.PropertyValue
 	FileProperties(0).name = "Hidden"
@@ -10,24 +11,26 @@ function OpenDocAsHidden(URL as string) as object
 	Rem Doc.Close(False)
 end function
 
-function GetCurrentFolder
+Rem gets the current directory (directory that ThisComponent is saved in)
+function GetCurrentDirectory
 	sUrl = ThisComponent.getURL()
+	if sUrl = "" then
+		GetCurrentDirectory = ""
+		exit function
+	end if
 	sParts = Split(sUrl, "/")
 	redim Preserve sParts(0 to UBound(sParts) - 1)
-	GetCurrentFolder = Join(sParts, "/")
+	GetCurrentDirectory = Join(sParts, "/")
 end function
 
-function GetFilesInCurrDirectory() as Variant
+Rem returns an array of file names matching certain file types in the given directory
+function GetFilesInDirectory(directory as string) as Variant
 	Rem file types to look for
 	dim fileTypes(3) as string 
 	fileTypes(0) = "*.ods"
 	fileTypes(1) = "*.csv"
 	fileTypes(2) = "*.xlsx"
 	fileTypes(3) = "*.xls"
-
-	Rem get current folder to search in
-	dim sPath as string
-	sPath = GetCurrentFolder
 	
 	Rem Get current file, we don't include it
 	sUrl = ThisComponent.getURL()
@@ -43,7 +46,7 @@ function GetFilesInCurrDirectory() as Variant
 
 	dim sValue as string
 	for each fileType In fileTypes
-		sValue = Dir$(sPath + getPathSeparator + fileType,0)
+		sValue = Dir$(directory + "/" + fileType,0)
 		do until sValue = ""
 			if sValue <> currFile then
 				if numOfFiles > capacity then
@@ -68,13 +71,15 @@ function GetFilesInCurrDirectory() as Variant
 	Rem next
 end function
 
+Rem return type for loadSections function below
 type loadSectionsReturnType
 	sections as variant
 	sectionsSize as integer
 	costCodeRowIndex as integer
 end type
 
-function loadSections(Sheet as variant) as loadSectionsReturnType
+Rem loads information regarding column headers
+function loadSections(Sheet as variant) as variant
 	Rem find row of columns headings (section names)
 	Rem we look for the first row that has something in its leftmost column, up to numRowsToSearch row
 	const headerID as string = "Cost Code"
@@ -87,16 +92,16 @@ function loadSections(Sheet as variant) as loadSectionsReturnType
 			exit for
 		end if
 	next
-	
+
 	Rem check that we found data within the limit
-	if row = numRowsToSearch then 
-		Rem return an integer to signify that there was an error
-		dim error1 as integer
-		loadSectionOfEstimate = error1
+	if row = numRowsToSearch then
 		Rem display the error to the user
 		msgbox "Error: Could not find column headings (No cell containing """ & headerID & """ found within the search range A1 to A" _
 			& numRowsToSearch & ")" & CHR(13) & CHR(13) & _
-			"To fix this error, insert the text """ & headerID & """ within the specified range, on the same row as your column headings"
+			"To fix this error, insert the text """ & headerID & """ within the specified range above, on the same row as your column headings"
+		Rem return an integer to signify that there was an error
+		dim error1 as integer
+		loadSections = error1
 		exit function
 	end if
 	
@@ -130,13 +135,19 @@ function loadSections(Sheet as variant) as loadSectionsReturnType
 end function
 
 sub main
+	dim currFolder as string
+	currFolder = GetCurrentDirectory
+	if currFolder = "" then
+		msgbox "Error: Please save this file, and then try again"
+		exit sub
+	end if
+
 	dim refDoc as object
-	refDoc = OpenDocAsHidden(GetCurrentFolder & "/file2.ods")
+	refDoc = OpenDocAsHidden(currFolder & "/file2.ods")
 	dim sheet as object
 	sheet = refDoc.Sheets(0)
 	dim sectionsInfo as variant
 	sectionsInfo = loadSections(sheet)
-	
 	if VarType(sectionsInfo) = V_INTEGER then
 		Rem failed
 		refDoc.Close(True)
@@ -145,6 +156,7 @@ sub main
 
 	if sectionsInfo.sectionsSize < 0 then
 		Rem no sections found
+		msgbox "Nothing to import"
 		refDoc.Close(True)
 		exit sub
 	end if
@@ -160,14 +172,19 @@ end sub
 
 sub addToDoc(sectionInfo as loadSectionsReturnType, data as variant)
 	Rem dim costCodeDoc as object
-	Rem costCodeDoc = OpenDocAsHidden(GetCurrentFolder & "/CostCodes.ods")
+	Rem dim currFolder as string
+	Rem currFolder = GetCurrentDirectory
+	Rem if currFolder = "" then
+	Rem 	exit sub
+	Rem end if
+	Rem costCodeDoc = OpenDocAsHidden(currFolder & "/CostCodes.ods")
 
 	dim sheet as object
 	sheet = ThisComponent.Sheets(0)
-	dim result as loadSectionsReturnType
+	dim result as variant
 	result = loadSections(sheet)
 
-	if VarType(sectionsInfo) = V_INTEGER then
+	if VarType(result) = V_INTEGER then
 		Rem failed
 		exit sub
 	end if
