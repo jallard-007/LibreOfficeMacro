@@ -1,14 +1,73 @@
 REM  *****  BASIC  *****
 
+REM global definition of variables
+Dim oDialog1 as object
+Sub StartEstimateSelectionForm(files() as string)
+    With GlobalScope.BasicLibraries
+       If Not .IsLibraryLoaded("Tools") Then .LoadLibrary("Tools")
+    End With
+    oDialog1 = Tools.ModuleControls.LoadDialog("Standard", "estimateSelectionForm")
+    oDialog1Model = oDialog1.Model
+    oListBox = oDialog1.GetControl("ListBox1")
+    dim position as integer
+    for each file in files
+        oListbox.additem(file, position)
+        position = position + 1
+    next
+    oDialog1.Execute()
+End Sub
+
+sub HandleCancelButtonPressed
+	If IsNull(oDialog1) then
+		exit sub
+	End If
+	oDialog1.EndExecute()
+	oDialog1 = Nothing
+end sub
+
+sub HandleSelectButtonPressed
+	If IsNull(oDialog1) then
+		exit sub
+	End If
+	dim selected as string
+	selected = oDialog1.GetControl("ListBox1").getSelectedItem
+	if selected = "" then
+		msgbox "Please choose an option"
+		exit sub
+	end if
+	oDialog1.EndExecute()
+	oDialog1 = Nothing
+	execute(selected)
+end sub
+
+sub main
+	if not ThisComponent.supportsService("com.sun.star.sheet.SpreadsheetDocument") then
+		exit sub
+	end if
+	currDirectory = GetCurrentDirectory
+	if currDirectory = "" then
+		msgbox "Error: Please save this file and try again"
+		exit sub
+	end if
+	With GlobalScope.BasicLibraries
+       If Not .IsLibraryLoaded("Tools") Then .LoadLibrary("Tools")
+    End With
+	t = Tools.Strings.BubbleSortList(GetFilesInDirectory(currDirectory))
+	msgbox t(0)
+	dim val as string
+	for each s in t
+	 val = val + s
+	next
+	msgbox val
+	StartEstimateSelectionForm(t)
+end sub
+
 Rem opens the given file in hidden mode
 function OpenDocAsHidden(URL as string) as object
 	dim FileProperties(0) as New com.sun.star.beans.PropertyValue
 	FileProperties(0).name = "Hidden"
 	FileProperties(0).value = True
 	OpenDocAsHidden = StarDesktop.loadComponentFromURL(Url, "_blank", 0, FileProperties())
-	
-	Rem Closes the file, just clean up
-	Rem Doc.Close(False)
 end function
 
 Rem gets the current directory (directory that ThisComponent is saved in)
@@ -33,9 +92,9 @@ function GetFilesInDirectory(directory as string) as Variant
 	fileTypes(3) = "*.xls"
 	
 	Rem Get current file, we don't include it
-	sUrl = ThisComponent.getURL()
-	urlSplit = Split(sUrl, "/")
-	currFile = urlSplit(UBound(urlSplit))
+	path = ConvertFromURL(ThisComponent.getURL())
+	pathSplit = Split(path, getPathSeparator)
+	currFile = pathSplit(UBound(pathSplit))
 
 	Rem initialize array to store files, starting size of capacity (actually capacity + 1 since basic is weird)
 	dim capacity as integer
@@ -64,11 +123,7 @@ function GetFilesInDirectory(directory as string) as Variant
 		redim preserve files(0 to numOfFiles - 1)
 	end if
 
-	GetFilesInCurrDirectory = files
-	Rem displays all found files
-	Rem for each t in GetFilesInCurrDirectory
-	Rem msgbox t
-	Rem next
+	GetFilesInDirectory = files
 end function
 
 Rem return type for loadSections function below
@@ -133,17 +188,17 @@ function loadSections(Sheet as variant) as variant
 	returnObject.costCodeRowIndex = row
 	loadSections = returnObject
 end function
-
-sub main
+ 
+sub execute(file as string)
 	dim currFolder as string
 	currFolder = GetCurrentDirectory
 	if currFolder = "" then
-		msgbox "Error: Please save this file, and then try again"
+		msgbox "Error: Please save this file and try again"
 		exit sub
 	end if
 
 	dim refDoc as object
-	refDoc = OpenDocAsHidden(currFolder & "/file2.ods")
+	refDoc = OpenDocAsHidden(currFolder & "/" & file)
 	dim sheet as object
 	sheet = refDoc.Sheets(0)
 	dim sectionsInfo as variant
@@ -167,7 +222,14 @@ sub main
 	next
 
 	refDoc.Close(True)
-	addToDoc(sectionsInfo, data, "file2")
+	fileSplit = Split(file, ".")
+
+	if UBound(fileSplit) > 0 then
+		redim preserve fileSplit(0 to UBound(fileSplit) - 1)
+	end if
+	dim fileWithoutType as string
+	fileWithoutType = Join(fileSplit, ".")
+	addToDoc(sectionsInfo, data, fileWithoutType)
 end sub
 
 sub addToDoc(sectionInfo as loadSectionsReturnType, data as variant, fileName as string)
